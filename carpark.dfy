@@ -128,4 +128,20 @@ class {:valid} CarPark {
         |this.availableSpaces| + |this.inUseSpaces| + |this.reservedSpaces| == carParkSize &&
         carParkSize > 0
     }
+
+    // Needs setting to read only ??
+    method printStatus()
+    {
+        var output := "";
+
+        // for loop (i in carParkSize)
+        // if availableSpaces.has(i) {output = output + i + "A  "}
+        // if reservedSpaces.has(i) {output = output + i + "R  "}
+        // if inUseSpaces.has(i) {output = output + i + "X  "}
+
+        // total available reserved = |reservedSpaces|
+        // total available public = |availableSpaces|
+        // total spaces in use = |inUseSpaces|
+        
+    }
 }

@@ -27,31 +27,61 @@ class {:valid} CarPark {
     // IDs of in use spaces
     var inUseSpaces: set<int>;
 
-
     // Set car park size
-    constructor (carParkSize: int, reservedSpacesSize: int) {
+    constructor (carParkSize: int, reservedSpacesSize: int) 
+    // Ensure has value and not negative
+    requires carParkSize > 0;
+    // Ensure not negative
+    requires reservedSpacesSize >= 0;
+    // Ensure not going to reserve more spaces than exist
+    requires reservedSpacesSize <= carParkSize; 
+    // Ensure initial allocation is 0
+    ensures |inUseSpaces| == 0; 
+    
+    // Doesn't like - Ensure reservedSpaces set cardinal matches given param
+    // ensures |reservedSpaces| == reservedSpacesSize; 
+    
+    // Doesn't like - Ensure availableSpaces set cardinal equal to overall size - reserved spaces
+    // ensures |availableSpaces| == carParkSize - reservedSpacesSize;
+    {
         this.carParkSize:= carParkSize;
         this.reservedSpacesSize:= reservedSpacesSize;
         this.minEmptySpaces:= 5;
-        this.subscriptionRegistrations:= new int[this.reservedSpacesSize];
+        this.subscriptionRegistrations:= new int[reservedSpacesSize];
         this.currentSubscriptionCount:= 0;
         this.reservedParkingInForce:= true;
-        this.inUseSpaces:= new set<int>;
-        this.reservedSpaces:= new set<int>;
-        this.availableSpaces:= new set<int>;
+        this.inUseSpaces:= {};
+        this.reservedSpaces:= set x: int | 0 < x <= reservedSpacesSize;
+        this.availableSpaces:= set x: int | reservedSpacesSize < x <= carParkSize;
 
-        // Need to initialise set values (dafny docs down, can't find out how)
-        // reserved spaces == 1..reservedSpacedSize
-        // available spaces == (reservedSpacesSize + 1)..carParkSize
+        
     }
 
-    method enterCarPark() 
+    method printSets()
     {
-        // If |availableSpace| < minEmptySpaces
+        print "InUseSpaces: ", this.inUseSpaces, "\n";
+        print "reservedSpaces: ", this.reservedSpaces, "\n";
+        print "availableSpaces: ", this.availableSpaces, "\n";
+    }
+
+    predicate IsFull()
+    reads this;
+    {
+        |availableSpaces| < minEmptySpaces
+    }
+
+    method enterCarPark() returns (spaceId: int, success: bool)
+    // If not enough spaces, success should be false
+    ensures old(|availableSpaces|) <= minEmptySpaces ==> !success;
+    // If not succeeded, old availableSpaces should be exact match to end availableSpaces
+    ensures !success ==> old(availableSpaces) <= availableSpaces;
+
+    {
+        // If |availableSpaces| < minEmptySpaces
         // Return fail (-1?)
 
-        // space = Get availableSpace.random
-        // availableSpace - space
+        // space = Get availableSpaces.random
+        // availableSpaces - space
         // inUseSpaces + space
         // return space number
 
@@ -60,7 +90,7 @@ class {:valid} CarPark {
     method leaveCarPark(spaceId: int) 
     {
         // Take space number as input param
-        // availableSpace - spaceId
+        // availableSpaces - spaceId
         // if (spaceId <= reservedSpacesSize ) 
         //      reservedSpaces + spaceId
         // else
@@ -68,7 +98,7 @@ class {:valid} CarPark {
     }
 
     // Should be a function - won't change anything, just return value
-    function checkAvailability() : int 
+    method checkAvailability() // : int
     {
         // return |availableSpaces|
     }
@@ -122,10 +152,13 @@ class {:valid} CarPark {
     predicate valid()
         reads this
     {
+        // Ensure no values appear in both given sets
         this.availableSpaces * this.inUseSpaces == {} &&
         this.reservedSpaces * this.inUseSpaces == {} &&
         this.availableSpaces * this.reservedSpaces == {} && 
+        // Ensure total size of sets == overall car park size
         |this.availableSpaces| + |this.inUseSpaces| + |this.reservedSpaces| == carParkSize &&
+        // Ensure carpark has size
         carParkSize > 0
     }
 
@@ -144,4 +177,13 @@ class {:valid} CarPark {
         // total spaces in use = |inUseSpaces|
         
     }
+}
+
+method Main()
+{
+    var carParkSize := 10;
+    var reservedSpaces := 5;
+    var cp := new CarPark(carParkSize, reservedSpaces);
+    cp.printSets();
+
 }

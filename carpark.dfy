@@ -28,7 +28,7 @@ class {:valid} CarPark {
     var inUseSpaces: set<int>;
 
     // Set car park size
-    constructor (carParkSize: int, reservedSpacesSize: int) 
+    constructor (carParkSize: int, reservedSpacesSize: int)
     // Ensure has value and not negative
     requires carParkSize > 0;
     // Ensure not negative
@@ -37,11 +37,9 @@ class {:valid} CarPark {
     requires reservedSpacesSize <= carParkSize; 
     // Ensure initial allocation is 0
     ensures |inUseSpaces| == 0; 
-    
-    // Doesn't like - Ensure reservedSpaces set cardinal matches given param
+    // Ensure reservedSpaces set cardinal matches given param
     // ensures |reservedSpaces| == reservedSpacesSize; 
-    
-    // Doesn't like - Ensure availableSpaces set cardinal equal to overall size - reserved spaces
+    // Ensure availableSpaces set cardinal equal to overall size - reserved spaces
     // ensures |availableSpaces| == carParkSize - reservedSpacesSize;
     {
         this.carParkSize:= carParkSize;
@@ -51,39 +49,49 @@ class {:valid} CarPark {
         this.currentSubscriptionCount:= 0;
         this.reservedParkingInForce:= true;
         this.inUseSpaces:= {};
+        this.reservedSpaces:= {};
+        this.availableSpaces:= {};
+
+        // Initialise sets with comprehension expression
         this.reservedSpaces:= set x: int | 0 < x <= reservedSpacesSize;
         this.availableSpaces:= set x: int | reservedSpacesSize < x <= carParkSize;
-
         
     }
 
     method printSets()
     {
-        print "InUseSpaces: ", this.inUseSpaces, "\n";
+        print "inUseSpaces: ", this.inUseSpaces, "\n";
         print "reservedSpaces: ", this.reservedSpaces, "\n";
         print "availableSpaces: ", this.availableSpaces, "\n";
     }
-
-    predicate IsFull()
-    reads this;
-    {
-        |availableSpaces| < minEmptySpaces
-    }
-
     method enterCarPark() returns (spaceId: int, success: bool)
+    modifies this;
+    requires valid();
     // If not enough spaces, success should be false
     ensures old(|availableSpaces|) <= minEmptySpaces ==> !success;
-    // If not succeeded, old availableSpaces should be exact match to end availableSpaces
-    ensures !success ==> old(availableSpaces) <= availableSpaces;
-
+    // If success, check spaceId is in inUseSpaces, old availableSpaces, and no longer in availableSpaces
+    ensures success ==> spaceId in inUseSpaces;
+    ensures success ==> spaceId !in availableSpaces;
+    ensures success ==> spaceId in old(availableSpaces);
+    
+    // Check spaceId is within range 1-CarParkSize
+    // ensures success ==> 0 < spaceId <= carParkSize;
     {
-        // If |availableSpaces| < minEmptySpaces
-        // Return fail (-1?)
+        // Check if enough empty spaces or return early
+        if |availableSpaces| <= minEmptySpaces
+        {
+            spaceId := -1;
+            success := false;
+            return;
+        }
 
-        // space = Get availableSpaces.random
-        // availableSpaces - space
-        // inUseSpaces + space
-        // return space number
+        // Get an arbitrary id and set success
+        spaceId :| spaceId in availableSpaces;
+        success := true;
+
+        // Remove spaceId from availableSpaces and add to inUseSpaces
+        availableSpaces := availableSpaces - {spaceId};
+        inUseSpaces := inUseSpaces + {spaceId};
 
     } 
 
@@ -150,17 +158,19 @@ class {:valid} CarPark {
 
     // For overall car park state
     predicate valid()
-        reads this
+    reads this;
     {
         // Ensure no values appear in both given sets
-        this.availableSpaces * this.inUseSpaces == {} &&
-        this.reservedSpaces * this.inUseSpaces == {} &&
-        this.availableSpaces * this.reservedSpaces == {} && 
+        availableSpaces * inUseSpaces == {} &&
+        reservedSpaces * inUseSpaces == {} &&
+        availableSpaces * reservedSpaces == {} && 
         // Ensure total size of sets == overall car park size
-        |this.availableSpaces| + |this.inUseSpaces| + |this.reservedSpaces| == carParkSize &&
+        |availableSpaces| + |inUseSpaces| + |reservedSpaces| == carParkSize &&
         // Ensure carpark has size
-        carParkSize > 0
+        carParkSize > 0 &&
+        minEmptySpaces > 0
     }
+
 
     // Needs setting to read only ??
     method printStatus()

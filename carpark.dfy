@@ -146,7 +146,13 @@ class {:valid} CarPark {
        |availableSpaces| - minEmptySpaces
     }
 
-    method enterReservedCarPark(registration: int) {
+    method enterReservedCarPark(registration: int) returns (spaceId: int, success: bool) 
+    requires valid();
+    ensures reservedParkingInForce && int !in registered ==> spaceId == -1 && !success
+    ensures reservedParkingInForce && int in registered ==> 0 <= spaceId && success;
+    ensures !reservedParkingInForce 
+
+    {
 
         // if reservedParkingInForce && registration not in subscriptionRegistrations
         //      return fail (-1);

@@ -140,10 +140,10 @@ class {:valid} CarPark {
         }
     }
 
-    // Should be a function - won't change anything, just return value
-    method checkAvailability() // : int
+    function checkAvailability(): int
+    reads this;
     {
-        // return |availableSpaces|
+       |availableSpaces| - minEmptySpaces
     }
 
     method enterReservedCarPark(registration: int) {

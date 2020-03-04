@@ -53,8 +53,8 @@ class {:valid} CarPark {
         this.availableSpaces:= {};
 
         // Initialise sets with comprehension expression
-        this.reservedSpaces:= set x: int | 0 < x <= reservedSpacesSize;
-        this.availableSpaces:= set x: int | reservedSpacesSize < x <= carParkSize;
+        this.reservedSpaces:= set x: int | 0 <= x < reservedSpacesSize;
+        this.availableSpaces:= set x: int | reservedSpacesSize <= x < carParkSize;
     }
 
     method printSets()
@@ -63,6 +63,7 @@ class {:valid} CarPark {
         print "reservedSpaces: ", this.reservedSpaces, "\n";
         print "availableSpaces: ", this.availableSpaces, "\n";
     }
+
     method enterCarPark() returns (spaceId: int, success: bool)
     modifies this;
     requires valid();
@@ -72,9 +73,8 @@ class {:valid} CarPark {
     ensures success ==> spaceId in inUseSpaces;
     ensures success ==> spaceId !in availableSpaces;
     ensures success ==> spaceId in old(availableSpaces);
-    
-    // Check spaceId is within range 1-CarParkSize
-    // ensures success ==> 0 < spaceId <= carParkSize;
+    // Check spaceId is within range 1 to CarParkSize
+    ensures success ==> 0 <= spaceId < carParkSize;
     {
         // Check if enough empty spaces or return early
         if |availableSpaces| <= minEmptySpaces
@@ -203,7 +203,11 @@ class {:valid} CarPark {
         |availableSpaces| + |inUseSpaces| + |reservedSpaces| == carParkSize &&
         // Ensure carpark has size
         carParkSize > 0 &&
-        minEmptySpaces > 0
+        minEmptySpaces > 0 &&
+        // Ensure all values in sets are within 1 to carParkSize
+        forall i :: i in availableSpaces ==> 0 <= i < carParkSize &&
+        forall i :: i in reservedSpaces ==> 0 <= i < carParkSize &&
+        forall i :: i in inUseSpaces ==> 0 <= i < carParkSize
     }
 
 

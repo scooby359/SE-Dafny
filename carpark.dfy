@@ -55,7 +55,6 @@ class {:valid} CarPark {
         // Initialise sets with comprehension expression
         this.reservedSpaces:= set x: int | 0 < x <= reservedSpacesSize;
         this.availableSpaces:= set x: int | reservedSpacesSize < x <= carParkSize;
-        
     }
 
     method printSets()
@@ -95,14 +94,50 @@ class {:valid} CarPark {
 
     } 
 
-    method leaveCarPark(spaceId: int) 
+    method leaveCarPark(spaceId: int) returns (success: bool)
+    modifies this;
+    requires valid();
+    // If spaceId not in old inUse, then failed
+    ensures spaceId !in old(inUseSpaces) ==> !success;
+    // If success, spaceId should be in old inUseSpaces
+    ensures success ==> spaceId in old(inUseSpaces);
+    // If success, inUse no longer has spaceId
+    ensures success ==> spaceId !in inUseSpaces;
+    // If success, new inUseSpaces + {spaceId} should match old inUseSpaces
+    ensures success ==> old(inUseSpaces) == inUseSpaces + {spaceId};
+    // If success, inUseSpaces == old(inUseSpaces) - {spaceId} (verify nothing else has changed except removal of space ID)
+    ensures success ==> inUseSpaces == old(inUseSpaces) - {spaceId};
+    // If spaceId was reserved space and reservedInfForce, should now be in reservedSpaces
+    ensures success && reservedParkingInForce && spaceId <= reservedSpacesSize ==> spaceId in reservedSpaces;
+    // If spaceId was not in reserved space, or reservedNotInForce, should now be in availableSpaces
+    ensures success && ((spaceId > reservedSpacesSize) || !reservedParkingInForce) ==> spaceId in availableSpaces;
     {
-        // Take space number as input param
-        // availableSpaces - spaceId
-        // if (spaceId <= reservedSpacesSize ) 
-        //      reservedSpaces + spaceId
-        // else
-        //      availableSpaces + spaceId
+        // If not inUse, fail early
+        if (spaceId !in inUseSpaces) 
+        {
+            success := false;
+            return;
+        }
+
+        success := true;
+        inUseSpaces := inUseSpaces - {spaceId};
+
+        // Check if weekend parking and early return
+        if (!reservedParkingInForce)
+        {
+            availableSpaces := availableSpaces + {spaceId};
+            return;
+        }
+
+        // Check if space should be returned to reserved parking or not
+        if (spaceId <= reservedSpacesSize)
+        {
+            reservedSpaces := reservedSpaces + {spaceId};
+        }
+        else
+        {
+            availableSpaces := availableSpaces + {spaceId};
+        }
     }
 
     // Should be a function - won't change anything, just return value

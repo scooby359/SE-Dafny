@@ -1,19 +1,19 @@
 // By default, a function is ghost, and cannot be called from non-ghost code.  To make it non-ghost, replace the keyword function with the two keywords “function method”.
 // http://homepage.cs.uiowa.edu/~tinelli/classes/181/Papers/dafny-reference.pdf pg 76
 
-class {:autocontracts} CarPark {
-
+class {:autocontracts} CarPark 
+{
     // Log messages
     const debug := true;
 
     // Total car park size
     const carParkSize:= 20;
 
-    // Minimum number of empty spaces - set to 5 in constructor
+    // Minimum number of empty spaces
     const minEmptySpaces:= 5;
 
     // Number of reserved spaces - 0 by default
-    const reservedSpacesSize:= 5; // int
+    const reservedSpacesSize:= 5;
 
     // The current number of subscriptions
     var subscriptionCount : int
@@ -34,22 +34,19 @@ class {:autocontracts} CarPark {
     var inUseSpaces: set<int>;
 
     // Set car park size
-    constructor (carParkSizeInput: int, reservedSpacesSizeInput: int)
-    // Ensure some reserved spaces, and that total size is bigger than reserved
-    requires 0 < reservedSpacesSizeInput < carParkSizeInput;
-    // Ensure total car park size is bigger than reserved spaced + the minimum 5 empty spaces
-    requires 5 + reservedSpacesSizeInput < carParkSizeInput;
-    
-    ensures 0 < reservedSpacesSize < carParkSize;
+    constructor ()
     // Ensure sets are correct size
     ensures |inUseSpaces| == 0; 
     ensures |reservedSpaces| == reservedSpacesSize;
     ensures |availableSpaces| == carParkSize - reservedSpacesSize;
+    ensures subscriptionCount == 0;
+    ensures |subscriptionRegistrations| == 0;
+    ensures reservedParkingInForce;
     {
         this.subscriptionRegistrations:= [];
         this.subscriptionCount:= 0;
         this.reservedParkingInForce:= true;
-        // Hard coding set values as cardinality won't work on set comprehension
+        // Hard coding set values as cardinality won't work with set comprehension
         // https://stackoverflow.com/a/48989897/10789835
         this.inUseSpaces:= {};
         this.reservedSpaces:= {0,1,2,3,4};
@@ -65,13 +62,15 @@ class {:autocontracts} CarPark {
 
     method enterCarPark() returns (spaceId: int, success: bool)
     modifies this;
-    // Success should be false if not enough spaces
+    // If failes:
+    // Should be as not enough spaces, and ensure no changes made
     ensures old(|availableSpaces|) <= minEmptySpaces ==> !success;
+    ensures !success ==> old(inUseSpaces) == inUseSpaces && old(availableSpaces) == availableSpaces;
     // If success:
-    // check old set + plus new value match new set to verify no other changes
-    ensures success ==> old(inUseSpaces) + {spaceId} == inUseSpaces;
-    // Check old set matches new set minus spaceID to verify no other changes
-    ensures success ==> old(availableSpaces) == availableSpaces + {spaceId};
+    // check spaceId wasn't already in use, and that no other changes made to old set
+    ensures success ==> spaceId !in old(inUseSpaces) && old(inUseSpaces) + {spaceId} == inUseSpaces;
+    // Check spaceId was available old, and no other changes made to availableSpaces
+    ensures success ==> spaceId in old(availableSpaces) && old(availableSpaces) == availableSpaces + {spaceId};
     // Check reserved set not changed regardless
     ensures old(reservedSpaces) == reservedSpaces;
     // autocontract ensures spaceId doesn't exist in more than one set
@@ -103,16 +102,24 @@ class {:autocontracts} CarPark {
     // If spaceId not in old inUse, then should have failed
     ensures spaceId !in old(inUseSpaces) ==> !success;
     // All sets should remain the same
-    ensures !success ==> old(inUseSpaces) == inUseSpaces && old(availableSpaces) == availableSpaces && old(reservedSpaces) == reservedSpaces;
+    ensures !success ==> 
+        old(inUseSpaces) == inUseSpaces && 
+        old(availableSpaces) == availableSpaces && 
+        old(reservedSpaces) == reservedSpaces;
     // If success:
-    // If success, spaceId should be in old inUseSpaces
-    ensures success ==> spaceId in old(inUseSpaces);
-    // If success, check inUseSpaces only differs by spaceId
-    ensures success ==> old(inUseSpaces) == inUseSpaces + {spaceId};
+    // If success, spaceId should be in old inUseSpaces, but not after and no other changes
+    ensures success ==> 
+        spaceId in old(inUseSpaces) && 
+        spaceId !in inUseSpaces && 
+        old(inUseSpaces) == inUseSpaces + {spaceId};
     // If spaceId was reserved space and reservedInForce, spaceId should now be in reservedSpaces with no other changes
-    ensures success && reservedParkingInForce && spaceId < reservedSpacesSize ==> old(reservedSpaces) + {spaceId} == reservedSpaces;
+    ensures success && reservedParkingInForce && spaceId < reservedSpacesSize ==>
+        spaceId !in old(reservedSpaces) &&
+        old(reservedSpaces) + {spaceId} == reservedSpaces;
     // If spaceId was not in reserved space, or !reservedParkingInForce, should now be in availableSpaces with no other changes
-    ensures success && ((spaceId > reservedSpacesSize) || !reservedParkingInForce) ==> old(availableSpaces) + {spaceId} == availableSpaces;
+    ensures success && ((spaceId > reservedSpacesSize) || !reservedParkingInForce) ==> 
+        spaceId !in old (availableSpaces) &&
+        old(availableSpaces) + {spaceId} == availableSpaces;
     // Precontract enforces correct set length and no duplication
     {
         // If not inUse, fail early
@@ -168,27 +175,33 @@ class {:autocontracts} CarPark {
     method enterReservedCarPark(registration: int) returns (spaceId: int, success: bool)
     modifies this;
     // If no success in any case, make sure all sets remain unchanged
-    ensures !success ==> old(inUseSpaces) == inUseSpaces && old(reservedSpaces) == reservedSpaces && old(availableSpaces) == availableSpaces;
+    ensures !success ==> 
+        old(inUseSpaces) == inUseSpaces && 
+        old(reservedSpaces) == reservedSpaces && 
+        old(availableSpaces) == availableSpaces;
     // If reserved in force:
-    // Return if subscriber
+    // Reject if not a subscriber
     ensures reservedParkingInForce && !regSubscribed(registration) ==> !success;
+    // If registered and some reserved spaces available, return success
     ensures reservedParkingInForce && regSubscribed(registration) && |old(reservedSpaces)| > 0 ==> success;
-    // Check old(reservedSpaces) had spaceId
-    ensures reservedParkingInForce && success ==> spaceId in old(reservedSpaces);
-    // If subscriber and success, check spaceId came from old(reservedSpaces) and all sets now updated correctly
+    // Check spaceId was in old(reservedSpaces) but now removed and no other changes
+    // Check spaceId wasn't in old(inUseSpaces) but now is with no other changes
+    // Check no changes to available spaces
     ensures reservedParkingInForce && success ==> 
-        old(reservedSpaces) - {spaceId} == reservedSpaces && 
+        spaceId in old(reservedSpaces) && 
+        old(reservedSpaces) - {spaceId} == reservedSpaces &&
+        spaceId !in old(inUseSpaces) &&
         old(inUseSpaces) + {spaceId} == inUseSpaces && 
         old(availableSpaces) == availableSpaces;
     // If reserved not in force:
     // If no spaces, should fail - need to check old predicate to check value before set size may be modified
     ensures !reservedParkingInForce && old(!hasAvailableSpaces()) ==> !success;
     ensures !reservedParkingInForce && old(hasAvailableSpaces()) ==> success;
-    // Check old(availableSpaces) had spaceId
-    ensures !reservedParkingInForce && success ==> spaceId in old(availableSpaces);
-    // Check sets updated correctly
+    // Check old(availableSpaces) had spaceId but doesn't now, that inUseSpaces didn't have it but now does and no changes to reserved
     ensures !reservedParkingInForce && success ==> 
-        old(availableSpaces) - {spaceId} == availableSpaces && 
+        spaceId in old(availableSpaces) &&
+        old(availableSpaces) - {spaceId} == availableSpaces &&
+        spaceId !in old(inUseSpaces) && 
         inUseSpaces == old(inUseSpaces) + {spaceId} && 
         old(reservedSpaces) == reservedSpaces;
     {
@@ -242,17 +255,27 @@ class {:autocontracts} CarPark {
     method makeSubscription(registration: int) returns (success: bool)
     modifies this;
     // Ensure in any case that sets haven't changed
-    ensures old(availableSpaces) == availableSpaces && old(inUseSpaces) == inUseSpaces && old(reservedSpaces) == reservedSpaces;
+    ensures 
+        old(availableSpaces) == availableSpaces && 
+        old(inUseSpaces) == inUseSpaces && 
+        old(reservedSpaces) == reservedSpaces;
     // If failed, subscriptions should not have changed
-    ensures !success ==> old(subscriptionRegistrations) == subscriptionRegistrations && old(subscriptionCount) == subscriptionCount;
+    ensures !success ==> 
+        old(subscriptionRegistrations) == subscriptionRegistrations &&
+        old(subscriptionCount) == subscriptionCount;
     // If no room, should fail
     ensures old(subscriptionCount) >= reservedSpacesSize ==> !success;
     // If already registered, should fail
     ensures registration in old(subscriptionRegistrations[..]) ==> !success;
     // If room in array and unique, should pass
-    ensures old(subscriptionCount) < reservedSpacesSize && registration !in old(subscriptionRegistrations[..]) ==> success;
+    ensures old(subscriptionCount) < reservedSpacesSize && registration !in old(subscriptionRegistrations[..]) ==> 
+        success;
     // If pass, check array updated and counter incremented
-    ensures success ==> registration !in old(subscriptionRegistrations[..]) && registration in subscriptionRegistrations[..] && subscriptionCount == old(subscriptionCount) + 1;
+    ensures success ==> 
+        registration !in old(subscriptionRegistrations[..]) && 
+        registration in subscriptionRegistrations[..] && 
+        subscriptionCount == old(subscriptionCount) + 1 &&
+        old(subscriptionRegistrations[..] + [registration]) == subscriptionRegistrations[..];
     {
         // Check space available
         if subscriptionCount >= reservedSpacesSize
@@ -280,11 +303,13 @@ class {:autocontracts} CarPark {
 
     method openReservedArea()
     modifies this;
-    // requires availableSpaces * reservedSpaces == {};
+    // make sure inUse not modified
+    ensures old(inUseSpaces) == inUseSpaces;
     ensures !reservedParkingInForce;
     // availableSpaces size should be total of old(availableSpaces) + old(reservedSpaces)
     ensures |availableSpaces| == old(|availableSpaces|) + old(|reservedSpaces|);
-    // Check reservedSpaces now
+    ensures availableSpaces == old(availableSpaces) + old(reservedSpaces);
+    // Check reservedSpaces now empty
     ensures |reservedSpaces| == 0;
     {    
         // Update flag
@@ -296,13 +321,22 @@ class {:autocontracts} CarPark {
         if debug {print "openReservedArea() - done";}
     }
 
-    method closeCarPark() {
-        // carsDestroyed = |inUseSpaces|
+    method closeCarPark() returns (destroyed: int)
+    modifies this;
+    ensures old(|inUseSpaces|) == destroyed;
+    ensures inUseSpaces == {};
+    ensures |reservedSpaces| == 5;
+    ensures |availableSpaces| == 15;
+    ensures reservedParkingInForce;
+    {
+        destroyed := |inUseSpaces|;
+        
         // Reset state
-        // inUseSpaces = {}
-        // reservedSpaces = {1...numberOfReservedSpaces}
-        // availableSpaces = {(numberOfReservedSpaces + 1) ... carParkSize}
-        // return carsDestroyed
+        inUseSpaces := {};
+        reservedSpaces := {0,1,2,3,4};
+        availableSpaces := {5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};  
+        reservedParkingInForce := true;
+        if debug { print "closeCarPark() - carpark closed. ", destroyed, " cars destroyed"; }
     }
 
     // For overall car park state
@@ -312,18 +346,13 @@ class {:autocontracts} CarPark {
         // Ensure no values appear in both given sets
         availableSpaces * inUseSpaces == {} &&
         reservedSpaces * inUseSpaces == {} &&
-        availableSpaces * reservedSpaces == {}
+        availableSpaces * reservedSpaces == {} &&
         // Ensure total size of sets == overall car park size
-        // |availableSpaces| + |inUseSpaces| + |reservedSpaces| == carParkSize // &&
-        // Ensure carpark has size
-        
-        // minEmptySpaces > 0 
+        |availableSpaces| + |inUseSpaces| + |reservedSpaces| == carParkSize &&
         // Ensure subscription count always between 0 and array length
-        // 0 <= subscriptionCount < |subscriptionRegistrations| // &&
-        // Ensure all values in sets are within 0 to carParkSize
-        // forall i :: i in availableSpaces ==> 0 <= i < carParkSize &&
-        // forall i :: i in reservedSpaces ==> 0 <= i < carParkSize &&
-        // forall i :: i in inUseSpaces ==> 0 <= i < carParkSize
+        0 <= subscriptionCount <= reservedSpacesSize &&
+        // Ensure all values in sets are within 0 to carParkSize(20)
+        forall i :: i in (availableSpaces + reservedSpaces + inUseSpaces) ==> 0 <= i < carParkSize
     }
 
 
@@ -346,9 +375,7 @@ class {:autocontracts} CarPark {
 
 method Main()
 {
-    var carParkSize := 15;
-    var reservedSpaces := 5;
-    var cp := new CarPark(carParkSize, reservedSpaces);
+    var cp := new CarPark();
     cp.printSets();
 
     var id1, success1 := cp.enterCarPark();

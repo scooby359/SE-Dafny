@@ -1,3 +1,6 @@
+// By default, a function is ghost, and cannot be called from non-ghost code.  To make itnon-ghost, replace the keyword function with the two keywords “function method”.
+// http://homepage.cs.uiowa.edu/~tinelli/classes/181/Papers/dafny-reference.pdf pg 76
+
 class {:autocontracts} CarPark {
 
     // Log messages
@@ -13,10 +16,10 @@ class {:autocontracts} CarPark {
     const reservedSpacesSize: int; // int
 
     // The current number of subscriptions
-    var currentSubscriptionCount : int
+    var subscriptionCount : int
 
     // Array of vehicle registrations with subscription
-    var subscriptionRegistrations: array<int>;
+    var subscriptionRegistrations: seq<int>;
 
     // If reserved parking in force, true by default
     var reservedParkingInForce: bool;
@@ -45,8 +48,8 @@ class {:autocontracts} CarPark {
     {
         this.carParkSize:= carParkSize;
         this.reservedSpacesSize:= reservedSpacesSize;
-        this.subscriptionRegistrations:= new int[reservedSpacesSize];
-        this.currentSubscriptionCount:= 0;
+        this.subscriptionRegistrations:= [];
+        this.subscriptionCount:= 0;
         this.reservedParkingInForce:= true;
         this.inUseSpaces:= {};
         this.reservedSpaces:= {};
@@ -112,7 +115,7 @@ class {:autocontracts} CarPark {
     ensures success ==> old(inUseSpaces) == inUseSpaces + {spaceId};
     // If spaceId was reserved space and reservedInForce, spaceId should now be in reservedSpaces with no other changes
     ensures success && reservedParkingInForce && spaceId < reservedSpacesSize ==> old(reservedSpaces) + {spaceId} == reservedSpaces;
-    // If spaceId was not in reserved space, or reservedNotInForce, should now be in availableSpaces with no other changes
+    // If spaceId was not in reserved space, or !reservedParkingInForce, should now be in availableSpaces with no other changes
     ensures success && ((spaceId > reservedSpacesSize) || !reservedParkingInForce) ==> old(availableSpaces) + {spaceId} == availableSpaces;
     // Precontract enforces correct set length and no duplication
     {
@@ -151,37 +154,131 @@ class {:autocontracts} CarPark {
        |availableSpaces| - minEmptySpaces
     }
 
-    method enterReservedCarPark(registration: int) returns (spaceId: int, success: bool) 
-    // ensures reservedParkingInForce && spaceId !in registered ==> spaceId == -1 && !success
-    // ensures reservedParkingInForce && spaceId in registered ==> 0 <= spaceId && success;
-    // ensures !reservedParkingInForce 
+    // Returns if available spaces greater than minEmptySpaces
+    // Needs to be function method to allow use in method body
+    function method hasAvailableSpaces(): bool
     {
-
-        // if reservedParkingInForce && registration not in subscriptionRegistrations
-        //      return fail (-1);
-
-        // if reserved parkingInForce && registration in subscriptionRegistrations
-        //      spaceId = reservedSpaces.random
-        //      reservedSpaces - spaceId
-        //      inUseSpaces + spaceId
-        //      return spaceId
-
-        // if !parkingInForce
-        //      spaceId = availableSpaces.random
-        //      availableSpaces - spaceId
-        //      inUseSpaces + spaceId
-        //      return spaceId
-
+        |availableSpaces| > minEmptySpaces
     }
 
-    method makeSubscription(registration: int) {
-        // Check space available
-        // if subscriptionCount => reservedSpacesSize
-        //      return false (fail?)
+    // Return if given reg is subscribed to reserved parking
+    // Needs to be function method to allow use in method body
+    function method regSubscribed(reg: int): bool
+    {
+        // Convert array to sequence for ease of checking
+        reg in subscriptionRegistrations[..]
+    }
 
-        // subscriptionRegistrations[subscriptionCount] = registration
-        // subscriptionCount++
-        // return true
+    method enterReservedCarPark(registration: int) returns (spaceId: int, success: bool)
+    // If no success in any case, make sure all sets remain unchanged
+    ensures !success ==> old(inUseSpaces) == inUseSpaces && old(reservedSpaces) == reservedSpaces && old(availableSpaces) == availableSpaces;
+
+    // If reserved in force:
+    // Return if subscriber
+    ensures reservedParkingInForce && !regSubscribed(registration) ==> !success;
+    ensures reservedParkingInForce && regSubscribed(registration) && |old(reservedSpaces)| > 0 ==> success;
+    // Check old(reservedSpaces) had spaceId
+    ensures reservedParkingInForce && success ==> spaceId in old(reservedSpaces);
+    // If subscriber and success, check spaceId came from old(reservedSpaces) and all sets now updated correctly
+    ensures reservedParkingInForce && success ==> 
+        old(reservedSpaces) - {spaceId} == reservedSpaces && 
+        old(inUseSpaces) + {spaceId} == inUseSpaces && 
+        old(availableSpaces) == availableSpaces;
+    // If reserved not in force:
+    // If no spaces, should fail - need to check old predicate to check value before set size may be modified
+    ensures !reservedParkingInForce && old(!hasAvailableSpaces()) ==> !success;
+    ensures !reservedParkingInForce && old(hasAvailableSpaces()) ==> success;
+    // Check old(availableSpaces) had spaceId
+    ensures !reservedParkingInForce && success ==> spaceId in old(availableSpaces);
+    // Check sets updated correctly
+    ensures !reservedParkingInForce && success ==> 
+        old(availableSpaces) - {spaceId} == availableSpaces && 
+        inUseSpaces == old(inUseSpaces) + {spaceId} && 
+        old(reservedSpaces) == reservedSpaces;
+    {
+        // Check if registration is allowed (convert array to sequence for easy checking)
+        if reservedParkingInForce && !regSubscribed(registration)
+        {
+            spaceId := -1;
+            success := false;
+            if debug { print "enterReservedCarPark(",registration,") - reg not subscribed\n"; }
+            return;
+        }
+
+        // If reserve in force and reg subscribed (need assert |reservedSpaces| > 0 for :| assignment) 
+        if reservedParkingInForce && |reservedSpaces| > 0 && regSubscribed(registration)
+        {
+            spaceId :| spaceId in reservedSpaces;
+            reservedSpaces := reservedSpaces - {spaceId};
+            inUseSpaces := inUseSpaces + {spaceId};
+            success := true;
+            if debug { print "enterReservedCarPark(",registration,") - reg in allowed list. Returning spaceID ", spaceId,"\n";}
+            return;
+        }
+        
+        
+        // If reserved parking not in force but no available space
+        if !reservedParkingInForce && !hasAvailableSpaces()
+        {
+            spaceId := -1;
+            success := false;
+            if debug { print "enterReservedCarPark(",registration,") - reservedParking not in force but no avail spaces";}
+            return;
+        }
+
+        // If reservedParking not in force and we have available space
+        if !reservedParkingInForce && hasAvailableSpaces()
+        {
+            spaceId :| spaceId in availableSpaces;
+            availableSpaces := availableSpaces - {spaceId};
+            inUseSpaces := inUseSpaces + {spaceId};
+            success := true;
+            if debug { print "enterReservedCarPark(",registration,") - reservedParking not in force. Returning spaceID ", spaceId,"\n";}
+            return;
+        }
+
+        // Shouldn't get here
+        spaceId := -1;
+        success := false;
+        if debug { print "enterReservedCarPark(",registration,") - unknown error - not caught by conditions";}
+    }
+
+    method makeSubscription(registration: int) returns (success: bool)
+    // Ensure in any case that sets haven't changed
+    ensures old(availableSpaces) == availableSpaces && old(inUseSpaces) == inUseSpaces && old(reservedSpaces) == reservedSpaces;
+    // If failed, subscriptions should not have changed
+    ensures !success ==> old(subscriptionRegistrations) == subscriptionRegistrations && old(subscriptionCount) == subscriptionCount;
+    // If no room, should fail
+    ensures old(subscriptionCount) >= reservedSpacesSize ==> !success;
+    // If already registered, should fail
+    ensures registration in old(subscriptionRegistrations[..]) ==> !success;
+    // If room in array and unique, should pass
+    ensures old(subscriptionCount) < reservedSpacesSize && registration !in old(subscriptionRegistrations[..]) ==> success;
+    // If pass, check array updated and counter incremented
+    ensures success ==> registration !in old(subscriptionRegistrations[..]) && registration in subscriptionRegistrations[..] && subscriptionCount == old(subscriptionCount) + 1;
+    {
+        // Check space available
+        if subscriptionCount >= reservedSpacesSize
+        {
+            success := false;
+            if debug { print "makeSubscription() - subscriptions full, rejected\n";}
+            return;
+        }
+
+        // Check reg not already subscribed
+        if (registration in subscriptionRegistrations[..])
+        {
+            success := false;
+            if debug { print "makeSubscription() - reg already subscribed, rejected\n";}
+            return;
+        }
+
+        // Make subscription
+        subscriptionRegistrations := subscriptionRegistrations + [registration];
+        subscriptionCount := subscriptionCount + 1;
+        success := true;
+        if debug { print "makeSubscription() - reg", registration, "subscribed \n";}
+        return;
     }
 
     method openReservedArea() {
@@ -212,6 +309,8 @@ class {:autocontracts} CarPark {
         // Ensure carpark has size
         carParkSize > 0 &&
         minEmptySpaces > 0 &&
+        // Ensure subscription count always between 0 and array length
+        0 <= subscriptionCount < |subscriptionRegistrations| &&
         // Ensure all values in sets are within 1 to carParkSize
         forall i :: i in availableSpaces ==> 0 <= i < carParkSize &&
         forall i :: i in reservedSpaces ==> 0 <= i < carParkSize &&
@@ -254,6 +353,13 @@ method Main()
 
     var leaveSuccess := cp.leaveCarPark(id1);
   
+    var re1, successRes1 := cp.enterReservedCarPark(1);
+
+    var regSuccess := cp.makeSubscription(1);
+
+    re1, successRes1 := cp.enterReservedCarPark(1);
+
+    leaveSuccess := cp.leaveCarPark(re1);
 
     cp.printSets();
 

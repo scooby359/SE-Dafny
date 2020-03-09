@@ -1,5 +1,8 @@
 class {:autocontracts} CarPark {
 
+    // Log messages
+    const debug := true;
+
     // Total car park size
     const carParkSize: int;
 
@@ -29,12 +32,10 @@ class {:autocontracts} CarPark {
 
     // Set car park size
     constructor (carParkSize: int, reservedSpacesSize: int)
-    // Ensure has value and not negative
-    requires carParkSize > 0;
-    // Ensure not negative
-    requires reservedSpacesSize > 0;
-    // Ensure not going to reserve more spaces than exist
-    requires reservedSpacesSize <= carParkSize; 
+    // Ensure some reserved spaces, and that total size is bigger than reserved
+    requires 0 < reservedSpacesSize < carParkSize;
+    // Ensure total car park size is bigger than reserved spaced + the minimum 5 empty spaces
+    requires 5 + reservedSpacesSize < carParkSize;
     // Ensure initial allocation is 0
     ensures |inUseSpaces| == 0; 
     // Ensure reservedSpaces set cardinal matches given param
@@ -65,18 +66,23 @@ class {:autocontracts} CarPark {
 
     method enterCarPark() returns (spaceId: int, success: bool)
     modifies this;
-    // If not enough spaces, success should be false
+    // Success should be false if not enough spaces
     ensures old(|availableSpaces|) <= minEmptySpaces ==> !success;
-    // If success, check spaceId is in inUseSpaces, old availableSpaces, and no longer in availableSpaces
-    ensures success ==> spaceId in inUseSpaces;
-    ensures success ==> spaceId !in availableSpaces;
-    ensures success ==> spaceId in old(availableSpaces);
+    // If success:
+    // check old set + plus new value match new set to verify no other changes
+    ensures success ==> old(inUseSpaces) + {spaceId} == inUseSpaces;
+    // Check old set matches new set minus spaceID to verify no other changes
+    ensures success ==> old(availableSpaces) == availableSpaces + {spaceId};
+    // Check reserved set not changed regardless
+    ensures old(reservedSpaces) == reservedSpaces;
+    // autocontract ensures spaceId doesn't exist in more than one set
     {
         // Check if enough empty spaces or return early
         if |availableSpaces| <= minEmptySpaces
         {
             spaceId := -1;
             success := false;
+            if debug { print "enterCarPark - availableSpaces less than minEmptySpaces \n"; }
             return;
         }
 
@@ -88,34 +94,39 @@ class {:autocontracts} CarPark {
         availableSpaces := availableSpaces - {spaceId};
         inUseSpaces := inUseSpaces + {spaceId};
 
+        if debug { print "enterCarPark - space ", spaceId, "\n"; }
+
     } 
 
     method leaveCarPark(spaceId: int) returns (success: bool)
     modifies this;
-    // If spaceId not in old inUse, then failed
+    // If no success:
+    // If spaceId not in old inUse, then should have failed
     ensures spaceId !in old(inUseSpaces) ==> !success;
+    // All sets should remain the same
+    ensures !success ==> old(inUseSpaces) == inUseSpaces && old(availableSpaces) == availableSpaces && old(reservedSpaces) == reservedSpaces;
+    // If success:
     // If success, spaceId should be in old inUseSpaces
     ensures success ==> spaceId in old(inUseSpaces);
-    // If success, inUse no longer has spaceId
-    ensures success ==> spaceId !in inUseSpaces;
-    // If success, new inUseSpaces + {spaceId} should match old inUseSpaces
+    // If success, check inUseSpaces only differs by spaceId
     ensures success ==> old(inUseSpaces) == inUseSpaces + {spaceId};
-    // If success, inUseSpaces == old(inUseSpaces) - {spaceId} (verify nothing else has changed except removal of space ID)
-    ensures success ==> inUseSpaces == old(inUseSpaces) - {spaceId};
-    // If spaceId was reserved space and reservedInfForce, should now be in reservedSpaces
-    ensures success && reservedParkingInForce && spaceId <= reservedSpacesSize ==> spaceId in reservedSpaces;
-    // If spaceId was not in reserved space, or reservedNotInForce, should now be in availableSpaces
-    ensures success && ((spaceId > reservedSpacesSize) || !reservedParkingInForce) ==> spaceId in availableSpaces;
+    // If spaceId was reserved space and reservedInForce, spaceId should now be in reservedSpaces with no other changes
+    ensures success && reservedParkingInForce && spaceId < reservedSpacesSize ==> old(reservedSpaces) + {spaceId} == reservedSpaces;
+    // If spaceId was not in reserved space, or reservedNotInForce, should now be in availableSpaces with no other changes
+    ensures success && ((spaceId > reservedSpacesSize) || !reservedParkingInForce) ==> old(availableSpaces) + {spaceId} == availableSpaces;
+    // Precontract enforces correct set length and no duplication
     {
         // If not inUse, fail early
         if (spaceId !in inUseSpaces) 
         {
             success := false;
+            if debug { print "leaveCarPark(",spaceId,") - failed, spaceId not in use\n"; }
             return;
         }
 
         success := true;
         inUseSpaces := inUseSpaces - {spaceId};
+        if debug { print "leaveCarPark(",spaceId,") - success\n"; }
 
         // Check if weekend parking and early return
         if (!reservedParkingInForce)
@@ -125,7 +136,7 @@ class {:autocontracts} CarPark {
         }
 
         // Check if space should be returned to reserved parking or not
-        if (spaceId <= reservedSpacesSize)
+        if (spaceId < reservedSpacesSize)
         {
             reservedSpaces := reservedSpaces + {spaceId};
         }
@@ -227,9 +238,23 @@ class {:autocontracts} CarPark {
 
 method Main()
 {
-    var carParkSize := 10;
+    var carParkSize := 15;
     var reservedSpaces := 5;
     var cp := new CarPark(carParkSize, reservedSpaces);
+    cp.printSets();
+
+    var id1, success1 := cp.enterCarPark();
+    var id2, success2 := cp.enterCarPark();
+    var id3, success3 := cp.enterCarPark();
+    var id4, success4 := cp.enterCarPark();
+    var id5, success5 := cp.enterCarPark();
+    var id6, success6 := cp.enterCarPark();
+
+    cp.printSets();     
+
+    var leaveSuccess := cp.leaveCarPark(id1);
+  
+
     cp.printSets();
 
 }

@@ -1,10 +1,10 @@
-class {:valid} CarPark {
+class {:autocontracts} CarPark {
 
     // Total car park size
     var carParkSize: int;
 
     // Minimum number of empty spaces - set to 5 in constructor
-    var minEmptySpaces: int;
+    const minEmptySpaces:= 5;
 
     // Number of reserved spaces - 0 by default
     var reservedSpacesSize: int; // int
@@ -32,7 +32,7 @@ class {:valid} CarPark {
     // Ensure has value and not negative
     requires carParkSize > 0;
     // Ensure not negative
-    requires reservedSpacesSize >= 0;
+    requires reservedSpacesSize > 0;
     // Ensure not going to reserve more spaces than exist
     requires reservedSpacesSize <= carParkSize; 
     // Ensure initial allocation is 0
@@ -44,7 +44,6 @@ class {:valid} CarPark {
     {
         this.carParkSize:= carParkSize;
         this.reservedSpacesSize:= reservedSpacesSize;
-        this.minEmptySpaces:= 5;
         this.subscriptionRegistrations:= new int[reservedSpacesSize];
         this.currentSubscriptionCount:= 0;
         this.reservedParkingInForce:= true;
@@ -66,15 +65,12 @@ class {:valid} CarPark {
 
     method enterCarPark() returns (spaceId: int, success: bool)
     modifies this;
-    requires valid();
     // If not enough spaces, success should be false
     ensures old(|availableSpaces|) <= minEmptySpaces ==> !success;
     // If success, check spaceId is in inUseSpaces, old availableSpaces, and no longer in availableSpaces
     ensures success ==> spaceId in inUseSpaces;
     ensures success ==> spaceId !in availableSpaces;
     ensures success ==> spaceId in old(availableSpaces);
-    // Check spaceId is within range 1 to CarParkSize
-    ensures success ==> 0 <= spaceId < carParkSize;
     {
         // Check if enough empty spaces or return early
         if |availableSpaces| <= minEmptySpaces
@@ -96,7 +92,6 @@ class {:valid} CarPark {
 
     method leaveCarPark(spaceId: int) returns (success: bool)
     modifies this;
-    requires valid();
     // If spaceId not in old inUse, then failed
     ensures spaceId !in old(inUseSpaces) ==> !success;
     // If success, spaceId should be in old inUseSpaces
@@ -141,17 +136,14 @@ class {:valid} CarPark {
     }
 
     function checkAvailability(): int
-    reads this;
     {
        |availableSpaces| - minEmptySpaces
     }
 
     method enterReservedCarPark(registration: int) returns (spaceId: int, success: bool) 
-    requires valid();
-    ensures reservedParkingInForce && int !in registered ==> spaceId == -1 && !success
-    ensures reservedParkingInForce && int in registered ==> 0 <= spaceId && success;
-    ensures !reservedParkingInForce 
-
+    // ensures reservedParkingInForce && spaceId !in registered ==> spaceId == -1 && !success
+    // ensures reservedParkingInForce && spaceId in registered ==> 0 <= spaceId && success;
+    // ensures !reservedParkingInForce 
     {
 
         // if reservedParkingInForce && registration not in subscriptionRegistrations
@@ -199,7 +191,6 @@ class {:valid} CarPark {
 
     // For overall car park state
     predicate valid()
-    reads this;
     {
         // Ensure no values appear in both given sets
         availableSpaces * inUseSpaces == {} &&

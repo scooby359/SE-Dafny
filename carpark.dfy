@@ -1,13 +1,13 @@
 class {:autocontracts} CarPark {
 
     // Total car park size
-    var carParkSize: int;
+    const carParkSize: int;
 
     // Minimum number of empty spaces - set to 5 in constructor
     const minEmptySpaces:= 5;
 
     // Number of reserved spaces - 0 by default
-    var reservedSpacesSize: int; // int
+    const reservedSpacesSize: int; // int
 
     // The current number of subscriptions
     var currentSubscriptionCount : int

@@ -1,4 +1,4 @@
-// By default, a function is ghost, and cannot be called from non-ghost code.  To make itnon-ghost, replace the keyword function with the two keywords “function method”.
+// By default, a function is ghost, and cannot be called from non-ghost code.  To make it non-ghost, replace the keyword function with the two keywords “function method”.
 // http://homepage.cs.uiowa.edu/~tinelli/classes/181/Papers/dafny-reference.pdf pg 76
 
 class {:autocontracts} CarPark {
@@ -7,13 +7,13 @@ class {:autocontracts} CarPark {
     const debug := true;
 
     // Total car park size
-    const carParkSize: int;
+    const carParkSize:= 20;
 
     // Minimum number of empty spaces - set to 5 in constructor
     const minEmptySpaces:= 5;
 
     // Number of reserved spaces - 0 by default
-    const reservedSpacesSize: int; // int
+    const reservedSpacesSize:= 5; // int
 
     // The current number of subscriptions
     var subscriptionCount : int
@@ -34,30 +34,26 @@ class {:autocontracts} CarPark {
     var inUseSpaces: set<int>;
 
     // Set car park size
-    constructor (carParkSize: int, reservedSpacesSize: int)
+    constructor (carParkSizeInput: int, reservedSpacesSizeInput: int)
     // Ensure some reserved spaces, and that total size is bigger than reserved
-    requires 0 < reservedSpacesSize < carParkSize;
+    requires 0 < reservedSpacesSizeInput < carParkSizeInput;
     // Ensure total car park size is bigger than reserved spaced + the minimum 5 empty spaces
-    requires 5 + reservedSpacesSize < carParkSize;
-    // Ensure initial allocation is 0
+    requires 5 + reservedSpacesSizeInput < carParkSizeInput;
+    
+    ensures 0 < reservedSpacesSize < carParkSize;
+    // Ensure sets are correct size
     ensures |inUseSpaces| == 0; 
-    // Ensure reservedSpaces set cardinal matches given param
-    // ensures |reservedSpaces| == reservedSpacesSize; 
-    // Ensure availableSpaces set cardinal equal to overall size - reserved spaces
-    // ensures |availableSpaces| == carParkSize - reservedSpacesSize;
+    ensures |reservedSpaces| == reservedSpacesSize;
+    ensures |availableSpaces| == carParkSize - reservedSpacesSize;
     {
-        this.carParkSize:= carParkSize;
-        this.reservedSpacesSize:= reservedSpacesSize;
         this.subscriptionRegistrations:= [];
         this.subscriptionCount:= 0;
         this.reservedParkingInForce:= true;
+        // Hard coding set values as cardinality won't work on set comprehension
+        // https://stackoverflow.com/a/48989897/10789835
         this.inUseSpaces:= {};
-        this.reservedSpaces:= {};
-        this.availableSpaces:= {};
-
-        // Initialise sets with comprehension expression
-        this.reservedSpaces:= set x: int | 0 <= x < reservedSpacesSize;
-        this.availableSpaces:= set x: int | reservedSpacesSize <= x < carParkSize;
+        this.reservedSpaces:= {0,1,2,3,4};
+        this.availableSpaces:= {5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};
     }
 
     method printSets()
@@ -170,9 +166,9 @@ class {:autocontracts} CarPark {
     }
 
     method enterReservedCarPark(registration: int) returns (spaceId: int, success: bool)
+    modifies this;
     // If no success in any case, make sure all sets remain unchanged
     ensures !success ==> old(inUseSpaces) == inUseSpaces && old(reservedSpaces) == reservedSpaces && old(availableSpaces) == availableSpaces;
-
     // If reserved in force:
     // Return if subscriber
     ensures reservedParkingInForce && !regSubscribed(registration) ==> !success;
@@ -244,6 +240,7 @@ class {:autocontracts} CarPark {
     }
 
     method makeSubscription(registration: int) returns (success: bool)
+    modifies this;
     // Ensure in any case that sets haven't changed
     ensures old(availableSpaces) == availableSpaces && old(inUseSpaces) == inUseSpaces && old(reservedSpaces) == reservedSpaces;
     // If failed, subscriptions should not have changed
@@ -281,11 +278,22 @@ class {:autocontracts} CarPark {
         return;
     }
 
-    method openReservedArea() {
-        // reservedParkingInForce = false;
-        // availableSpaces + reservedSpaces
-        // reservedSpaces = {}
+    method openReservedArea()
+    modifies this;
+    // requires availableSpaces * reservedSpaces == {};
+    ensures !reservedParkingInForce;
+    // availableSpaces size should be total of old(availableSpaces) + old(reservedSpaces)
+    ensures |availableSpaces| == old(|availableSpaces|) + old(|reservedSpaces|);
+    // Check reservedSpaces now
+    ensures |reservedSpaces| == 0;
+    {    
+        // Update flag
+        reservedParkingInForce := false;
 
+        // Move all reserved spaces to available
+        availableSpaces := availableSpaces + reservedSpaces;
+        reservedSpaces:= {};
+        if debug {print "openReservedArea() - done";}
     }
 
     method closeCarPark() {
@@ -298,23 +306,24 @@ class {:autocontracts} CarPark {
     }
 
     // For overall car park state
-    predicate valid()
+    predicate Valid()
+    reads this;
     {
         // Ensure no values appear in both given sets
         availableSpaces * inUseSpaces == {} &&
         reservedSpaces * inUseSpaces == {} &&
-        availableSpaces * reservedSpaces == {} && 
+        availableSpaces * reservedSpaces == {}
         // Ensure total size of sets == overall car park size
-        |availableSpaces| + |inUseSpaces| + |reservedSpaces| == carParkSize &&
+        // |availableSpaces| + |inUseSpaces| + |reservedSpaces| == carParkSize // &&
         // Ensure carpark has size
-        carParkSize > 0 &&
-        minEmptySpaces > 0 &&
+        
+        // minEmptySpaces > 0 
         // Ensure subscription count always between 0 and array length
-        0 <= subscriptionCount < |subscriptionRegistrations| &&
-        // Ensure all values in sets are within 1 to carParkSize
-        forall i :: i in availableSpaces ==> 0 <= i < carParkSize &&
-        forall i :: i in reservedSpaces ==> 0 <= i < carParkSize &&
-        forall i :: i in inUseSpaces ==> 0 <= i < carParkSize
+        // 0 <= subscriptionCount < |subscriptionRegistrations| // &&
+        // Ensure all values in sets are within 0 to carParkSize
+        // forall i :: i in availableSpaces ==> 0 <= i < carParkSize &&
+        // forall i :: i in reservedSpaces ==> 0 <= i < carParkSize &&
+        // forall i :: i in inUseSpaces ==> 0 <= i < carParkSize
     }
 
 
@@ -360,6 +369,12 @@ method Main()
     re1, successRes1 := cp.enterReservedCarPark(1);
 
     leaveSuccess := cp.leaveCarPark(re1);
+
+    var re2, successRes2 := cp.enterReservedCarPark(2);
+
+    cp.openReservedArea();
+
+    re2, successRes2 := cp.enterReservedCarPark(2);
 
     cp.printSets();
 

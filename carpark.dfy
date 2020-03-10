@@ -297,7 +297,7 @@ class {:autocontracts} CarPark
         subscriptionRegistrations := subscriptionRegistrations + [registration];
         subscriptionCount := subscriptionCount + 1;
         success := true;
-        if debug { print "makeSubscription() - reg", registration, "subscribed \n";}
+        if debug { print "makeSubscription() - reg ", registration, " subscribed \n";}
         return;
     }
 
@@ -409,38 +409,145 @@ class {:autocontracts} CarPark
         print "\n\n";
         
     }
+
+    method printSubscribedRegistrations()
+    {
+        print "Subscribed registrations: ", subscriptionRegistrations, "\n";
+    }
 }
+
+
 
 method Main()
 {
+    // Initialise and print starting car park
+    print "New Car Park\n";
     var cp := new CarPark();
     cp.printParkingPlan();
 
-    var id1, success1 := cp.enterCarPark();
-    var id2, success2 := cp.enterCarPark();
-    var id3, success3 := cp.enterCarPark();
-    var id4, success4 := cp.enterCarPark();
-    var id5, success5 := cp.enterCarPark();
-    var id6, success6 := cp.enterCarPark();
-
-    cp.printParkingPlan();   
-
-    var leaveSuccess := cp.leaveCarPark(id1);
-  
-    var re1, successRes1 := cp.enterReservedCarPark(1);
-
-    var regSuccess := cp.makeSubscription(1);
-
-    re1, successRes1 := cp.enterReservedCarPark(1);
-
-    leaveSuccess := cp.leaveCarPark(re1);
-
-    var re2, successRes2 := cp.enterReservedCarPark(2);
-
-    cp.openReservedArea();
-
-    re2, successRes2 := cp.enterReservedCarPark(2);
-
+    // Have 10 cars enter public entrance - should all pass
+    print "10 cars entering public entrance - should pass\n";
+    var c1, s1 := cp.enterCarPark();
+    var c2, s2 := cp.enterCarPark();
+    var c3, s3 := cp.enterCarPark();
+    var c4, s4 := cp.enterCarPark();
+    var c5, s5 := cp.enterCarPark();
+    var c6, s6 := cp.enterCarPark();
+    var c7, s7 := cp.enterCarPark();
+    var c8, s8 := cp.enterCarPark();
+    var c9, s9 := cp.enterCarPark();
+    var c10, s10 := cp.enterCarPark();
+    print "Public car entry successful: ", s1, ", ", s2, ", ", s3, ", ", s4, ", ", s5,
+        ", ", s6, ", ", s7, ", ", s8, ", ", s9, ", ", s10, "\n";
     cp.printParkingPlan();
 
+    // Have two more cars attempt entry - should fail as 5 spaces must be kept empty and spaceId -1 returned
+    print "Attempting two additional entries to public space - should fail\n";
+    var c11, s11 := cp.enterCarPark();
+    var c12, s12 := cp.enterCarPark();
+    print "Public car entry successful: ", c11, ", ", c12, "\n";
+    cp.printParkingPlan();
+    
+    // Have public car attempt to use reserved entrance to verify entry is rejected and spaceId -1 returned
+    print "Attempting public car using reserved entrance when not subscribed\n";
+    var c13Reg := 131;
+    var c13, s13 := cp.enterReservedCarPark(c13Reg);
+    print "Entry to reserved successful: ", s13, "\n";
+    cp.printParkingPlan();
+
+    // Subscribe car reg and attept access to subscriber entrance
+    print "Registering car as subscriber and attempting reserved access again\n";
+    var s13r:= cp.makeSubscription(c13Reg);
+    c13, s13 := cp.enterReservedCarPark(c13Reg);
+    print "Entry to reserved successful: ", s13, "\n";
+    cp.printParkingPlan();
+
+    // Attempt to register same car again - should return false
+    print "Attempting another subscription with existing subscriber\n";
+    s13r:= cp.makeSubscription(c13Reg);
+    print "Subscription successful: ", s13r, "\n";
+
+    // Subscribe five more vehicles - four should be successful, one should fail as not enough spaces
+    print "Attempting to subscribe five more vehicles - expect one to fail as insufficent reserved spaces\n";
+    var c14Reg, c15Reg, c16Reg, c17Reg, c18Reg := 141, 151, 161, 171, 181;
+    var s14r:= cp.makeSubscription(c14Reg);
+    var s15r:= cp.makeSubscription(c15Reg);
+    var s16r:= cp.makeSubscription(c16Reg);
+    var s17r:= cp.makeSubscription(c17Reg);
+    var s18r:= cp.makeSubscription(c18Reg);
+    print "Subscriptions succeeded: ", s14r, ", ", s15r, ", ", s16r, ", ", s17r, ", ", s18r, "\n";
+    cp.printSubscribedRegistrations();
+
+    // Attempt to gain access to subscriber gate for subscribed vehicles
+    print "Attempt to gain access to subscriber gate for five vehicles just registered - last one should fail as not subscribed\n";
+    var c14, s14 := cp.enterReservedCarPark(c14Reg);
+    var c15, s15 := cp.enterReservedCarPark(c15Reg);
+    var c16, s16 := cp.enterReservedCarPark(c16Reg);
+    var c17, s17 := cp.enterReservedCarPark(c17Reg);
+    var c18, s18 := cp.enterReservedCarPark(c18Reg);
+    print "Reserved entry succeeded: ", s14, ", ", s15, ", ", s16, ", ", s17, ", ", s18, "\n";
+    cp.printParkingPlan();
+
+    // Subscribed usets to leave - should return true and restore space to reserved counter
+    print "Two subscribers to leave car park, should restore spaces to reserved count\n";
+    var c13L := cp.leaveCarPark(c13);
+    var c14L := cp.leaveCarPark(c14);
+    print "Subscribed cars left successful: ", c13L, ", ", c14L, "\n";
+    cp.printParkingPlan();
+
+    // Public users to leave - should return true and restore spaces to available counter
+    print "Two public cars to leave car park, should restore spaces to available count\n";
+    var c1L := cp.leaveCarPark(c1);
+    var c2L := cp.leaveCarPark(c2);
+    print "Public car left successful: ", c1L, ", ", c2L, "\n";
+    cp.printParkingPlan();
+
+    // Empty space to attempt to leave car park - should return false as not in use
+    print "Already empty space to attempt to leave - should return false as invalid request\n";
+    c1L := cp.leaveCarPark(c1);
+    print "Invalid car left successful: ", c1L, "\n";
+    cp.printParkingPlan();
+
+    // Close car park for the night - all cars to be destroyed and car park return to initial state
+    print "Car park to close - all remaining cars to be destroyed and car park returned to initial state\n";
+    var destroyed := cp.closeCarPark();
+    print "Cars destroyed: ", destroyed, "\n";
+    cp.printParkingPlan();
+
+    // Set weekend - all cars can use reserved parking
+    print "Set weekend parking - all spaces become available\n";
+    cp.openReservedArea();
+    cp.printParkingPlan();
+
+    // Public car to attempt entry to reserved entrance
+    print "Public car to attempt access by reserved entrance\n";
+    var c1Reg := 011;
+    c1, s1 := cp.enterReservedCarPark(c1Reg);
+    print "Public car entry to reserved area successful: ", s1, "\n";
+    cp.printParkingPlan();
+
+    // Public car to attempt entry to reserved entrance
+    print "Public car to attempt access by public entrance\n";
+    c2, s2 := cp.enterCarPark();
+    print "Public car entry to public area successful: ", s2, "\n";
+    cp.printParkingPlan();
+
+    // Subscribed usets to leave - should return true and restore space to reserved counter
+    print "Both cars to leave car park, should restore spaces to available count\n";
+    c1L := cp.leaveCarPark(c1);
+    c2L := cp.leaveCarPark(c2);
+    print "Subscribed cars left successful: ", c1L, ", ", c2L, "\n";
+    cp.printParkingPlan();
+
+    // Attempt to have 16 cars enter the car park - last one should fail as min 5 empty spaces required
+    print "Attempting 16 cars entry to carpark - last should fail as min 5 empty spaces required\n";
+    print "Public car entry successfull: ";
+    var x:= 0;
+    while x < 16
+    {
+        var cx, rx := cp.enterCarPark();
+        print rx, ", ";
+        x := x + 1;
+    }
+    print "\n";
 }

@@ -231,7 +231,7 @@ class {:autocontracts} CarPark
         {
             spaceId := -1;
             success := false;
-            if debug { print "enterReservedCarPark(",registration,") - reservedParking not in force but no avail spaces";}
+            if debug { print "enterReservedCarPark(",registration,") - reservedParking not in force but no avail spaces\n";}
             return;
         }
 
@@ -249,7 +249,7 @@ class {:autocontracts} CarPark
         // Shouldn't get here
         spaceId := -1;
         success := false;
-        if debug { print "enterReservedCarPark(",registration,") - unknown error - not caught by conditions";}
+        if debug { print "enterReservedCarPark(",registration,") - unknown error - not caught by conditions\n";}
     }
 
     method makeSubscription(registration: int) returns (success: bool)
@@ -318,7 +318,7 @@ class {:autocontracts} CarPark
         // Move all reserved spaces to available
         availableSpaces := availableSpaces + reservedSpaces;
         reservedSpaces:= {};
-        if debug {print "openReservedArea() - done";}
+        if debug {print "openReservedArea() - done\n";}
     }
 
     method closeCarPark() returns (destroyed: int)
@@ -336,7 +336,7 @@ class {:autocontracts} CarPark
         reservedSpaces := {0,1,2,3,4};
         availableSpaces := {5,6,7,8,9,10,11,12,13,14,15,16,17,18,19};  
         reservedParkingInForce := true;
-        if debug { print "closeCarPark() - carpark closed. ", destroyed, " cars destroyed"; }
+        if debug { print "closeCarPark() - carpark closed. ", destroyed, " cars destroyed\n"; }
     }
 
     // For overall car park state
@@ -357,18 +357,56 @@ class {:autocontracts} CarPark
 
 
     // Needs setting to read only ??
-    method printStatus()
+    method printParkingPlan()
     {
-        var output := "";
+        print "\n\n";
 
-        // for loop (i in carParkSize)
-        // if availableSpaces.has(i) {output = output + i + "A  "}
-        // if reservedSpaces.has(i) {output = output + i + "R  "}
-        // if inUseSpaces.has(i) {output = output + i + "X  "}
+        var i:= 0;
+        var rowCount:= 0;
+        while i < carParkSize
+        {
+            if i < 10 
+            {
+                print "0",i;
+            } 
+            else
+            {
+                print "",i;
+            }
+            
 
-        // total available reserved = |reservedSpaces|
-        // total available public = |availableSpaces|
-        // total spaces in use = |inUseSpaces|
+            if i in availableSpaces
+            {
+                print "A ";
+            }
+            if i in inUseSpaces
+            {
+                print "X ";
+            }
+            if i in reservedSpaces
+            {
+                print "R ";
+            }
+            
+
+            if rowCount == 4
+            { 
+                print "\n";
+                rowCount := 0;
+
+            } 
+            else 
+            {
+                rowCount := rowCount + 1;
+            }
+            i:= i + 1;
+            
+        }
+
+        print "\nTotal Available: ", |availableSpaces|;
+        print "\nTotal Reserved: ", |reservedSpaces|;
+        print "\nTotal In Use: ", |inUseSpaces|;
+        print "\n\n";
         
     }
 }
@@ -376,7 +414,7 @@ class {:autocontracts} CarPark
 method Main()
 {
     var cp := new CarPark();
-    cp.printSets();
+    cp.printParkingPlan();
 
     var id1, success1 := cp.enterCarPark();
     var id2, success2 := cp.enterCarPark();
@@ -385,7 +423,7 @@ method Main()
     var id5, success5 := cp.enterCarPark();
     var id6, success6 := cp.enterCarPark();
 
-    cp.printSets();     
+    cp.printParkingPlan();   
 
     var leaveSuccess := cp.leaveCarPark(id1);
   
@@ -403,6 +441,6 @@ method Main()
 
     re2, successRes2 := cp.enterReservedCarPark(2);
 
-    cp.printSets();
+    cp.printParkingPlan();
 
 }
